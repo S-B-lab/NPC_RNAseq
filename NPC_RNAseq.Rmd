@@ -145,6 +145,8 @@ source("/home/ramhak/Dropbox/PHD/PAPER I/R_v2/Function_directory/get_legend.R")
 ```{r echo=F, warning=F, error=F, message=F}
 #1. Importing read count matrix
 DT_read_count <- fread("merged_gene_counts.txt", header=T)
+############################### REMOVING 101:108 & 111
+DT_read_count[, c(2:9, 12):=NULL]
 #2. Adjusting column names 
 names(DT_read_count) <- c(names(DT_read_count)[1], do.call(rbind, lapply(names(DT_read_count)[2:length(names(DT_read_count))], function(col_name){substr(col_name, 7, 9)})))
 #3. Retrieving gene annotations (SYMBOL) based on ENSEMBL_ID
@@ -153,9 +155,11 @@ gene_annotations <- suppressMessages(data.table(OrganismDbi::select(Rattus.norve
 gene_annotations <- gene_annotations[!duplicated(ENSEMBL)]
 #5. Merging gene annotations with read_count_matrix 
 DT_read_count <- merge(DT_read_count, gene_annotations, by.x="ENSEMBL_ID", by.y="ENSEMBL")
-DT_read_count <- setcolorder(DT_read_count, c(1,30,2:29))
+DT_read_count <- setcolorder(DT_read_count, c(1,21,2:20))
 #6. Importing meta_data
 DT_meta_data <- fread("meta_data.csv")
+############################### REMOVING 101:108 & 111
+DT_meta_data <- DT_meta_data[!Scilife.index%in%c(101:108, 111)]
 DT_meta_data[, `:=`(Cell=NULL, Index=NULL, Sample_name=NULL)]
 setnames(DT_meta_data, c("Scilife.index", "Treatment"), c("ID", "group"))
 DT_meta_data[Week==0, Week:=NA]
@@ -174,6 +178,97 @@ pander(data.table(Characteristic=c("Samples (n):","Groups (n):","Unique ENSEMBL 
 
 ```
 
+***
+
+# Data Pre-Processing
+
+## *Removing genes with low expression*
+
+**Fig 1. Density of log-CPM values pre -and post filtering**
+
+```{r echo=F, warning=F, message=F, error=F, fig.height=5, fig.width=13}
+#1. Converting the read count matrix into a log CPM matrix 
+DT_lcpm_unfiltered <- data.table(cpm(DT_read_count[,-c(1:2)], log=T, lib.size = colSums(DT_read_count[,-c(1:2)])))
+#2. Filtering out lowly expressed genes from read count matrix using log-CPM values
+DT_read_count_filtered <- DT_read_count[rowSums(DT_lcpm_unfiltered>0)>=4]
+#3. Calculating log CPM matrix using the filtered read count matrix
+DT_lcpm <- cpm(DT_read_count_filtered[,-c(1:2)], log=T, lib.size = colSums(DT_read_count_filtered[,-c(1:2)]))
+#4. Melting data for plotting
+lcpm_unfiltered_plotdata <- suppressWarnings(melt.data.table(data.table(DT_lcpm_unfiltered), variable.name="ID", value.name = "lcpm"))
+lcpm_filtered_plotdata <- suppressWarnings(melt.data.table(data.table(DT_lcpm), variable.name="ID", value.name = "lcpm"))
+
+#5. Plotting function (density against log-CPM values)
+logCPM_density_plot_function <- function(plot.data, type, legend.type){
+  logCPM_density_plot_out <- ggplot(plot.data, aes(x=lcpm, color=ID))+
+  geom_line(stat="density", size=1.25)+
+  geom_vline(xintercept=0, linetype=2)+
+
+  scale_x_continuous(breaks=seq(-10,16,2), limits=c(-8,16))+
+  scale_y_continuous(breaks=seq(0,0.6,0.05), limits=c(0,0.6))+
+  scale_color_manual(values=diverge_hcl(28, c=100, l=c(50,90), power=1))+
+  annotate(geom="text", x=5, y=0.55, label=type, size=7.5, alpha=0.6)+
+  annotate(geom="text", x=5, y=0.5, label=paste("Genes (n):", toString(unique(plot.data[,.N, by="ID"][,N]))), fontface=2, size=4)+
+  theme(legend.position=legend.type, axis.title=element_blank())
+  
+  return(logCPM_density_plot_out)  
+}
+
+density_raw_plot <- logCPM_density_plot_function(lcpm_unfiltered_plotdata, "RAW","right")
+density_legend <- get_legend(density_raw_plot)
+density_raw_plot <- logCPM_density_plot_function(lcpm_unfiltered_plotdata, "RAW","none")
+density_filtered_plot <- logCPM_density_plot_function(lcpm_filtered_plotdata, "FILTERED","none")
+
+###SECTION OUTPUT
+grid.arrange(arrangeGrob(density_raw_plot, left=textGrob("A", vjust=-10, hjust=1.5, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(density_filtered_plot, left=textGrob("B", vjust=-10, hjust=1.5, gp=gpar(fontface=2, fontsize=20))), ncol=2, widths=c(3,3), bottom=textGrob("log-CPM", gp=gpar(fontsize=17, fontface="bold")), left=textGrob("Density", gp=gpar(fontsize=17, fontface="bold"), rot=90))
+
+```
+
+**Fig 1.** _Figure reports the density of log-CPM for every sample (by color) pre -and post filtering of genes with low expression. The raw read count matrix is filtered based on log-CPM values. Vertical dashed line represents the cut-off (log-CPM=0, CPM=1). The figure shows a distinct shift of the density from below the threshold (Fig 1A) to above the threshold (Fig 1B). Approximately 1/3 of the genes remain post filtering._  
+
+***
+
+## *Adjusting gene expression distributions*
+
+```{r echo=F, warning=F, message=F, error=F}
+#1. Calculating normalization factors using TMM algorithm and adding to meta_data
+DT_meta_data <- DT_meta_data[,norm.factor.tmm:=calcNormFactors(DT_read_count_filtered[,-(1:2)], method = "TMM")]
+#2. Calculating adjusted library sizes in meta_data
+DT_meta_data <- DT_meta_data[,effective.library.size:=library.size*norm.factor.tmm]
+```
+
+**Fig 2. Distribution of log-CPM values pre -and post normalization**
+
+```{r echo=F, warning=F, message=F, error=F, fig.height=5, fig.width=12}
+#1. Calculating log2 of read_count_matrix with unadjusted and adjusted library size respectively
+lcpm_temp_notNormalised <- cpm(DT_read_count_filtered[,-(1:2)], log=T, lib.size = DT_meta_data[,library.size])
+lcpm_temp <- cpm(DT_read_count_filtered[,-(1:2)], log=T, lib.size = DT_meta_data[,effective.library.size])
+#2. Adding id columns and converting into data.table
+DT_lcpm_notNormalised <- data.table(DT_read_count_filtered[,c(1:2)], lcpm_temp_notNormalised)
+DT_lcpm <- data.table(DT_read_count_filtered[,c(1:2)], lcpm_temp)
+#3. Melting data in order to create plottable data
+DT_lcpm_notNormalised_melt <- melt.data.table(DT_lcpm_notNormalised, id.vars=c("ENSEMBL_ID", "SYMBOL"), variable.name = "ID")
+DT_lcpm_melt <- melt.data.table(DT_lcpm, id.vars=c("ENSEMBL_ID", "SYMBOL"), variable.name = "ID")
+
+#4. Plotting function for gene expression distribution
+log_cpm_distribution_function <- function(dataset, type){
+  log_cpm_distribution_plot <- ggplot(dataset, aes(ID, value, color=ID))+
+  geom_jitter(DT_lcpm_notNormalised_melt[,.(value=sample(value, 10000)), by="ID"], mapping=aes(ID, value), alpha=0.05)+
+  geom_boxplot(size=1, color="black", alpha=0)+
+
+  scale_y_continuous(limits=c(-8,20), breaks=seq(-10,20,2))+
+  scale_fill_manual(values=diverge_hcl(28, c=100, l=c(50,90), power=1), name="Sample:")+
+  scale_color_manual(values=diverge_hcl(28, c=100, l=c(50,90), power=1), name="Sample:")+
+    
+  theme(legend.position="none", axis.title=element_blank(), axis.text.x=element_text(size=10, angle=90))+
+  annotate("text", x=11.5, y=18, label=type, size=7.5, alpha=0.6)
+
+  return(log_cpm_distribution_plot)
+}
+
+###SECTION OUTPUT
+grid.arrange(arrangeGrob(log_cpm_distribution_function(DT_lcpm_notNormalised_melt, "RAW"), left=textGrob("A", vjust=-10, hjust=1.5, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(log_cpm_distribution_function(DT_lcpm_melt, "NORMALIZED"), left=textGrob("B", vjust=-10, hjust=1.5, gp=gpar(fontface=2, fontsize=20))), ncol=2, bottom=textGrob("Sample", gp=gpar(fontsize=17, fontface="bold")), left=textGrob("log-CPM", gp=gpar(fontsize=17, fontface="bold"), rot=90))
+
+```
 
 
 
