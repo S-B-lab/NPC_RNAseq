@@ -1,0 +1,180 @@
+---
+title: "Transcriptomal Changes in NPCs Following Exposure to Spinal Cord Injury"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+
+# Executive Summary
+
+***
+
+# Project Description
+
+**Hypothesis:** 
+
+**Experimental setup & sequencing:** 
+
+**Data analysis:** Data was analysed using edgeR and limma packages, both available through [Bioconductor](https://www.bioconductor.org/) using R (version 3.4.4, *Someone to Lean On*). Two additional key packages used were ggplot2 and data.table.    
+
+***
+
+# Data Overview
+
+```{r echo=F, warning=F, error=F, message=F}
+#1. Installing packages
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("limma")
+
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("edgeR")
+
+# source("https://bioconductor.org/biocLite.R")
+# biocLite("Rattus.norvegicus")
+
+#install.packages("data.table")
+#install.packages("ggplot2")
+#install.packages("cowplot")
+#install.packages("RColorBrewer")
+#install.packages("gplots")
+#install.packages("pvclust")
+#install.packages("VennDiagram")
+# install.packages("rafalib")
+#install.packages("grid")
+#install.packages("colorspace")
+#install.packages("ellipse")
+#install.packages("ggrepel")
+#install.packages("rafalib")
+#install.packages("boot")
+#install.packages("pvclust")
+#install.packages("RCurl")
+#install.packages("XML")
+#install.packages("xml2")
+#install.packages("caret")
+#install.packages("Rtsne")
+#install.packages("plot3D")
+#install.packages("EMCluster")
+#install.packages("MeanShift")
+#install.packages("apcluster")
+#install.packages("e1071")
+#install.packages("circlize")
+
+#Installation guide for ggraph
+  #sudo apt-get -y install libcurl4-gnutls-dev
+  #sudo apt-get -y install libssl-dev
+  #install.packages("devtools")
+  #sudo apt-get install libudunits2-dev
+  # install.packages('udunits2', type = "source",
+  #                    configure.args=c('--with-udunits2-lib=/home/ramhak/R/x86_64-pc-linux-gnu-library/3.4'))
+  #devtools::install_github("thomasp85/ggraph", dependencies=TRUE, force=T)
+  #devtools::install_github('tidyverse/ggplot2', dependencies=T, force=T) #Get the development version of ggplot2
+  #library(ggplot2)
+
+#2. Attaching packages
+library(limma)
+library(edgeR)
+library(Rattus.norvegicus)
+
+library(data.table)
+library(ggplot2)
+library(cowplot)
+library(gridExtra)
+library(grid)
+
+library(colorspace)
+library(RColorBrewer)
+library(gplots)
+library(VennDiagram)
+library(ellipse)
+library(plot3D)
+library(ggrepel)
+library(rafalib)
+
+library(boot)
+library(pvclust)
+
+library(knitr)
+library(pander)
+
+library(RCurl)
+library(XML)
+library(xml2)
+
+library(caret)
+library(Rtsne)
+
+library(MASS)
+library(mda)
+library(kernlab)
+library(EMCluster)
+library(MeanShift)
+library(apcluster)
+library(e1071)
+
+library(ggraph)
+library(igraph)
+library(ape)
+library(circlize)
+
+#Clearing workspace
+rm(list=ls())
+
+#Importing function for legend collection from ggplot 
+source("/home/ramhak/Dropbox/PHD/PAPER I/R_v2/Function_directory/get_legend.R")
+```
+
+```{r echo=F, warning=F, message=F, error=F}
+############## IMPORTING DATA, ANNOTATING GENES & ORGANISING META DATA #############
+```
+
+**Table 1. Data set characteristics.**
+
+```{r echo=F, warning=F, error=F, message=F}
+#1. Importing read count matrix
+DT_read_count <- fread("merged_gene_counts.txt", header=T)
+#2. Adjusting column names 
+names(DT_read_count) <- c(names(DT_read_count)[1], do.call(rbind, lapply(names(DT_read_count)[2:length(names(DT_read_count))], function(col_name){substr(col_name, 7, 9)})))
+#3. Retrieving gene annotations (SYMBOL) based on ENSEMBL_ID
+gene_annotations <- suppressMessages(data.table(OrganismDbi::select(Rattus.norvegicus, keys=DT_read_count[,as.character(ENSEMBL_ID)], columns="SYMBOL", keytype = "ENSEMBL")))
+#4. Removing duplicates in retrieved annotations
+gene_annotations <- gene_annotations[!duplicated(ENSEMBL)]
+#5. Merging gene annotations with read_count_matrix 
+DT_read_count <- merge(DT_read_count, gene_annotations, by.x="ENSEMBL_ID", by.y="ENSEMBL")
+DT_read_count <- setcolorder(DT_read_count, c(1,30,2:29))
+#6. Importing meta_data
+DT_meta_data <- fread("meta_data.csv")
+DT_meta_data[, `:=`(Cell=NULL, Index=NULL, Sample_name=NULL)]
+setnames(DT_meta_data, c("Scilife.index", "Treatment"), c("ID", "group"))
+DT_meta_data[Week==0, Week:=NA]
+DT_meta_data[group=="None", group:="invitro"]
+#7. Adding library size (=column sums)
+DT_meta_data <- DT_meta_data[,library.size:=colSums(DT_read_count[,-(1:2)])]
+#8. Adding normalisation factor (=1 initially)
+DT_meta_data <- DT_meta_data[,norm.factor:=1]
+#9. Defining factor variables
+factor_vars <- c("ID", "group")
+DT_meta_data[,factor_vars] <- DT_meta_data[,lapply(.SD, factor), .SDcols=factor_vars]
+
+###SECTION OUTPUT
+#Table with dataset characteristics
+pander(data.table(Characteristic=c("Samples (n):","Groups (n):","Unique ENSEMBL IDs (n):"), Value= c(ncol(DT_read_count[,-(1:2)]), length(unique(DT_meta_data[,group])), nrow(DT_read_count))), justify=c("left", "left"))
+
+```
+
+
+
+
+
