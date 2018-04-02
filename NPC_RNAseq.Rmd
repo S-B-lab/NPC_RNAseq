@@ -1012,17 +1012,60 @@ kable(top_20_dge_SCI, align="c", col.names = rep(c("Gene", "log2(fold change)", 
 
 ***
 
-#Gene Ontology and KEGG Enrichment Analysis
-
-**Table 5. GO terms and KEGG pathways (FDR<0.05)**
+# Gene Ontology and KEGG Enrichment Analysis
 
 ```{r echo=F, warning=F, message=F, error=F}
 #1. Getting ENTREZ IDs for all genes in the filtered read count matrix 
 entrez_ID <- suppressMessages(data.table(OrganismDbi::select(Rattus.norvegicus, keys=DT_read_count_filtered[,as.character(ENSEMBL_ID)], columns="ENTREZID", keytype="ENSEMBL")))
 #2. Removing duplicates
 entrez_ID <- entrez_ID[!duplicated(ENSEMBL)]
+#3. Gene ontology enrichment analysis function
+GO_retreiver <- function(contrast){
+  GO_out <- goana(DT_efit, coef=contrast, geneid = entrez_ID[,as.character(ENTREZID)], FDR=0.05, species="Rn") 
+  GO_out <- data.table(topGO(GO_out, sort="down", n=10)) 
+  return(GO_out)}
 
-
-
+#4. KEGG pathway enrichment analysis function
+KEGG_retriever <- function(contrast){
+  KEGG_out <- kegga(DT_efit, coef=contrast, geneid = entrez_ID[,as.character(ENTREZID)], FDR=0.05, species="Rn")
+  KEGG_out <- data.table(topKEGG(KEGG_out, sort="down", n=10))
+  return(KEGG_out)}
 ```
+
+**Table 5. GO terms and KEGG pathways (FDR<0.05)**
+
+**Contrast: Naive[2w] vs SCI[2w]**
+
+```{r echo=F, warning=F, message=F, error=F}
+GO_retreiver(6)
+KEGG_retriever(6)
+```
+
+**Contrast: Naive[3w] vs SCI[3w]**  
+
+```{r echo=F, warning=F, message=F, error=F}
+GO_retreiver(9)
+KEGG_retriever(9)
+```
+
+**Contrast: Naive[2w] vs Naive[3w]**  
+
+```{r echo=F, warning=F, message=F, error=F}
+GO_retreiver(5)
+KEGG_retriever(5)
+```
+
+**Contrast: SCI[2w] vs SCI[3w]**  
+
+```{r echo=F, warning=F, message=F, error=F}
+GO_retreiver(10)
+KEGG_retriever(10)
+```
+
+***
+
+# Agglomerative hierarchical clustering with heatmap
+
+**Fig 19. Hierarchical clustering of samples together with heatmap of significantly differentially expressed genes **
+
 
