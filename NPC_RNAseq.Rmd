@@ -828,12 +828,16 @@ venn_plot_2w_3w <- invisible(draw.pairwise.venn(sum(venn_data_logical[,6]),
 grid.arrange(arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("A", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("B", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), ncol=2)
 ```
 
+**Fig 17.** _Figure A reports the number of DGE genes between contrasts Naive[2w] vs invitro, SCI[2w] vs invitro, Naive[2w] vs SCI[2w]. Figure B reports the number of DGE genes between contrasts Naive[2w] vs invitro, SCI[2w] vs invitro and Naive[2w] vs SCI[2w]._
+
 **Fig 18. Number of differentially expressed genes for each contrast (FDR<0.05)**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=5, fig.height=4, fig.align='center'}
 ###SECTION OUTPUT
 grid.arrange(arrangeGrob(gTree(children=venn_plot_2w_3w)))
 ```
+
+**Fig 18.** _Figure reports the number of DGE genes within and between contrasts Naive[2w]vsSCI[2w] and Naive[3w]vsSCI[3w]._
 
 **Table 3. Number of differentially over -and under-expressed genes for each contrast (FDR<0.05)**
 
@@ -859,8 +863,6 @@ kable(DT_dge_summary[, 5:10], align="c", col.names = c("Naive[2w] vs Naive[3w]",
 # SCI_2w_SCI_3w #contrast 10
 
 ```
-
-**Fig 18. Mean difference -and volcano plot (FDR<1e-6)**
 
 ```{r echo=F, warning=F, message=F, error=F}
 #1. Creating plotting data for mean-difference plot
@@ -950,6 +952,8 @@ volcano_plot_function <- function(data_set){
 
 ```
 
+**Fig 18. Mean difference -and volcano plot (FDR<0.05)**
+
 ```{r echo=F, warning=F, message=F, error=F, fig.width=14, fig.height=5}
 plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_2w), left=textGrob("A", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_2w), left=textGrob("B", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 
@@ -960,10 +964,65 @@ plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_Naive), l
 plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_SCI), left=textGrob("G", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_SCI), left=textGrob("H", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 ```
 
-**Fig 18.** _Figure 18A reports a mean-difference plot which illustrates the number of over -and under expressed genes. Threshold is set at $log_2(fold change)$ +/-1 (blue lines). Blue dots represents genes above or below the log-fold change thresholds while red dots represent those genes which are above/below the thresholds and are significantly (p<1e-6) differentially expressed. Fig 18B is a volcano plot which reports the number of significantly (p<1e-6) over -and underexpressed genes (marked with red). Blue dots represent genes which have logFC <-1 or >1 but are not significantly expressed. Data in both plots is for the contrast "MSC[SCI] vs MSC[naive]"._
+**Fig 18.** _Right figure reports a mean-difference plot which illustrates the number of over -and under expressed genes. Threshold is set at $log_2(fold change)$ +/-1 (blue lines). Blue dots represents genes above or below the log-fold change thresholds while red dots represent those genes which are above/below the thresholds and are significantly (p<1e-6) differentially expressed. Left figure is a volcano plot which reports the number of significantly (p<1e-6) over -and underexpressed genes (marked with red). Blue dots represent genes which have logFC <-1 or >1 but are not significantly expressed. Figure A&B are for contrast Naive[2w]vsSCI[2w], Figure C&D are for contrast Naive[3w]vsSCI[3w], figure E&F are for contrast Naive[2w]vsNaive[3w] and figure G&H for contrast SCI[2w]vsSCI[3w]._
 
-**Table 4. 10 most significantly up -and downregulated differentially expressed genes**
+```{r echo=F, warning=F, message=F, error=F}
+#1. Function for retrieving logFC and associated p-values for most over -and underexpressed genes 
+top_20_dge_retreiver <- function(dge.data, n, p.val.cutoff, contrast){
+  top_20_dge_out <- data.table(toptable(dge.data, coef=contrast, number=Inf, genelist = DT_read_count_filtered[,ifelse(is.na(SYMBOL), ENSEMBL_ID, SYMBOL)]))
+  
+  negative_logFC <-  data.table(top_20_dge_out[logFC<(-1) & adj.P.Val<p.val.cutoff][order(adj.P.Val)][1:n])
+  negative_logFC <- negative_logFC[,.(ID, logFC=round(logFC, 2), adj.P.Val=format(adj.P.Val, scientific=T, digits=2))]
+
+  positive_logFC <- data.table(top_20_dge_out[logFC>1 & adj.P.Val<p.val.cutoff][order(adj.P.Val)][1:n])
+  positive_logFC <- positive_logFC[,.(ID, logFC=round(logFC, 2), adj.P.Val=format(adj.P.Val, scientific=T, digits=2))]
+  
+  return(cbind(positive_logFC, negative_logFC))}
+
+#2. Creating top 20 data for each contrast of interest
+top_20_dge_2w <- top_20_dge_retreiver(DT_efit, 10, 0.05, 6)
+top_20_dge_3w <- top_20_dge_retreiver(DT_efit, 10, 0.05, 9)
+top_20_dge_Naive <- top_20_dge_retreiver(DT_efit, 10, 0.05, 5)
+top_20_dge_SCI <- top_20_dge_retreiver(DT_efit, 10, 0.05, 10)
+
+```
+
+**Table 4. 10 most significantly up -and downregulated differentially expressed genes (FDR<0.05)**  
+
+**Contrast: Naive[2w] vs SCI[2w]**
+
+```{r echo=F, warning=F, message=F, error=F}
+kable(top_20_dge_2w, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+```
+
+**Contrast: Naive[3w] vs SCI[3w]**  
+```{r echo=F, warning=F, message=F, error=F}
+kable(top_20_dge_3w, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+```
+
+**Contrast: Naive[2w] vs Naive[3w]**  
+```{r echo=F, warning=F, message=F, error=F}
+kable(top_20_dge_Naive, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+```
+
+**Contrast: SCI[2w] vs SCI[3w]**  
+```{r echo=F, warning=F, message=F, error=F}
+kable(top_20_dge_SCI, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+```
+
+***
+
+#Gene Ontology and KEGG Enrichment Analysis
+
+**Table 5. GO terms and KEGG pathways (FDR<0.05)**
+
+```{r echo=F, warning=F, message=F, error=F}
+#1. Getting ENTREZ IDs for all genes in the filtered read count matrix 
+entrez_ID <- suppressMessages(data.table(OrganismDbi::select(Rattus.norvegicus, keys=DT_read_count_filtered[,as.character(ENSEMBL_ID)], columns="ENTREZID", keytype="ENSEMBL")))
+#2. Removing duplicates
+entrez_ID <- entrez_ID[!duplicated(ENSEMBL)]
 
 
 
+```
 
