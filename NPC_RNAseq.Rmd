@@ -20,15 +20,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Executive Summary
 
-* Samples 101-108 + 111 have double peaks in density of log-cpm plots. 101-108 had low alignment rates and 111 is a definite outlier in the MDS. Samples 101-108 and 111 are therefore removed. 
+* Samples 101-108 (1w SCI&Naive) + 111 (2w SCI) have double peaks in density of log-cpm plots. 101-108 had low alignment rates and 111 is a definite outlier in the MDS. Samples 101-108 and 111 are therefore removed.
 
 ***
 
 # Project Description
 
-**Hypothesis:** 
+**Hypothesis:**  The transcriptome of subventricular zone derived neural progenitor cells (NPCs) transplanted into a spinal cord injury environment is altered as compared to NPCs transplanted into uninjured spinal cord.
 
-**Experimental setup & sequencing:** 
+**Experimental setup & sequencing:** GFP+NPCs were transplanted into injured (250 kdyn contusion injury, 8-10 days post SCI) or uninjured spinal cord using a glas capillary pipette. Lewis female rats were used in all experiments. At 2 & 3 w post transplantation the GFP+NPCs were collected using FACS. FACS of GFP+NPCs from injured spinal cord was performed using injured spinal cord as reference (i.e. negative gate setting). FACS of GFP+NPCs from uninjured spinal cord was performed using uninjured spinal cord as reference. Total RNA, digested of DNase, was isolated and libraries were prepared using SMARTer Stranded Total RNA-Seq Kit - Pico Input Mammalian (Takara). Sequencing was performed 2x125bp in two lane using the HiSeq2500 system and v4 sequencing chemistry (Illumina Inc.) performed by the SNP&SEQ Technology Platform (Stockholm, Sweden).
 
 **Data analysis:** Data was analysed using edgeR and limma packages, both available through [Bioconductor](https://www.bioconductor.org/) using R (version 3.4.4, *Someone to Lean On*). Two additional key packages used were ggplot2 and data.table.    
 
@@ -147,32 +147,39 @@ source("/home/ramhak/Dropbox/PHD/PAPER I/R_v2/Function_directory/get_legend.R")
 ```{r echo=F, warning=F, error=F, message=F}
 #1. Importing read count matrix
 DT_read_count <- fread("merged_gene_counts.txt", header=T)
-############################### REMOVING 101:108 & 111
 DT_read_count[, c(2:9, 12):=NULL]
+
 #2. Adjusting column names 
 names(DT_read_count) <- c(names(DT_read_count)[1], do.call(rbind, lapply(names(DT_read_count)[2:length(names(DT_read_count))], function(col_name){substr(col_name, 7, 9)})))
+
 #3. Retrieving gene annotations (SYMBOL) based on ENSEMBL_ID
 gene_annotations <- suppressMessages(data.table(OrganismDbi::select(Rattus.norvegicus, keys=DT_read_count[,as.character(ENSEMBL_ID)], columns="SYMBOL", keytype = "ENSEMBL")))
+
 #4. Removing duplicates in retrieved annotations
 gene_annotations <- gene_annotations[!duplicated(ENSEMBL)]
 #5. Merging gene annotations with read_count_matrix 
 DT_read_count <- merge(DT_read_count, gene_annotations, by.x="ENSEMBL_ID", by.y="ENSEMBL")
 DT_read_count <- setcolorder(DT_read_count, c(1, 21, 2:20))
+
 #6. Importing meta_data
 DT_meta_data <- fread("meta_data.csv")
 DT_meta_data <- DT_meta_data[!Scilife.index%in%c(101:108, 111)]
+
 #7. Adjusting meta_data
 DT_meta_data[, `:=`(Cell=NULL, Index=NULL, Sample_name=NULL)]
 setnames(DT_meta_data, c("Scilife.index", "Treatment"), c("ID", "group"))
 DT_meta_data[Week==0, Week:=NA]
 DT_meta_data[group=="None", group:="invitro"]
+
 #8. Creating time-group variable in meta_data
 DT_meta_data[group!="invitro", group:=paste(paste(group, Week, sep=":"), "W", sep="")]
+
 #9. Adding library size (=column sums)
 DT_meta_data <- DT_meta_data[,library.size:=colSums(DT_read_count[,-(1:2)])]
-#8. Adding normalisation factor (=1 initially)
+
+#10. Adding normalisation factor (=1 initially)
 DT_meta_data <- DT_meta_data[,norm.factor:=1]
-#9. Defining factor variables
+#11. Defining factor variables
 factor_vars <- c("ID", "group")
 DT_meta_data[,factor_vars] <- DT_meta_data[,lapply(.SD, factor), .SDcols=factor_vars]
 
@@ -193,10 +200,13 @@ pander(data.table(Characteristic=c("Samples (n):","Groups (n):","Unique ENSEMBL 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=5, fig.width=13}
 #1. Converting the read count matrix into a log CPM matrix 
 DT_lcpm_unfiltered <- data.table(cpm(DT_read_count[,-c(1:2)], log=T, lib.size = colSums(DT_read_count[,-c(1:2)])))
+
 #2. Filtering out lowly expressed genes from read count matrix using log-CPM values
 DT_read_count_filtered <- DT_read_count[rowSums(DT_lcpm_unfiltered>0)>=4]
+
 #3. Calculating log CPM matrix using the filtered read count matrix
 DT_lcpm <- cpm(DT_read_count_filtered[,-c(1:2)], log=T, lib.size = colSums(DT_read_count_filtered[,-c(1:2)]))
+
 #4. Melting data for plotting
 lcpm_unfiltered_plotdata <- suppressWarnings(melt.data.table(data.table(DT_lcpm_unfiltered), variable.name="ID", value.name = "lcpm"))
 lcpm_filtered_plotdata <- suppressWarnings(melt.data.table(data.table(DT_lcpm), variable.name="ID", value.name = "lcpm"))
@@ -227,7 +237,7 @@ grid.arrange(arrangeGrob(density_raw_plot, left=textGrob("A", vjust=-10, hjust=1
 
 ```
 
-**Fig 1.** _Figure reports the density of log-CPM for every sample (by color) pre -and post filtering of genes with low expression. The raw read count matrix is filtered based on log-CPM values. Vertical dashed line represents the cut-off (log-CPM=0, CPM=1). The figure shows a distinct shift of the density from below the threshold (Fig 1A) to above the threshold (Fig 1B). Approximately 1/3 of the genes remain post filtering._  
+**Fig 1.** _Figure reports the density of log-CPM for every sample (by color) pre -and post filtering of genes with low expression. The raw read count matrix is filtered based on log-CPM values. Vertical dashed line represents the cut-off (log-CPM=0, CPM=1). The figure shows a distinct shift of the density from below the threshold (Fig 1A) to above the threshold (Fig 1B). Approximately 1/2 of the genes remain post filtering._  
 
 ***
 
@@ -236,6 +246,7 @@ grid.arrange(arrangeGrob(density_raw_plot, left=textGrob("A", vjust=-10, hjust=1
 ```{r echo=F, warning=F, message=F, error=F}
 #1. Calculating normalization factors using TMM algorithm and adding to meta_data
 DT_meta_data <- DT_meta_data[,norm.factor.tmm:=calcNormFactors(DT_read_count_filtered[,-(1:2)], method = "TMM")]
+
 #2. Calculating adjusted library sizes in meta_data
 DT_meta_data <- DT_meta_data[,effective.library.size:=library.size*norm.factor.tmm]
 ```
@@ -246,9 +257,11 @@ DT_meta_data <- DT_meta_data[,effective.library.size:=library.size*norm.factor.t
 #1. Calculating log2 of read_count_matrix with unadjusted and adjusted library size respectively
 lcpm_temp_notNormalised <- cpm(DT_read_count_filtered[,-(1:2)], log=T, lib.size = DT_meta_data[,library.size])
 lcpm_temp <- cpm(DT_read_count_filtered[,-(1:2)], log=T, lib.size = DT_meta_data[,effective.library.size])
+
 #2. Adding id columns and converting into data.table
 DT_lcpm_notNormalised <- data.table(DT_read_count_filtered[,c(1:2)], lcpm_temp_notNormalised)
 DT_lcpm <- data.table(DT_read_count_filtered[,c(1:2)], lcpm_temp)
+
 #3. Melting data in order to create plottable data
 DT_lcpm_notNormalised_melt <- melt.data.table(DT_lcpm_notNormalised, id.vars=c("ENSEMBL_ID", "SYMBOL"), variable.name = "ID")
 DT_lcpm_melt <- melt.data.table(DT_lcpm, id.vars=c("ENSEMBL_ID", "SYMBOL"), variable.name = "ID")
@@ -285,16 +298,21 @@ grid.arrange(arrangeGrob(log_cpm_distribution_function(DT_lcpm_notNormalised_mel
 ```{r echo=F, warning=F, message=F, error=F, fig.height=6, fig.width=12}
 #1. Calculating the variance between samples within each gene
 gene_variance <- data.table(DT_lcpm[,c(1:2)], variance=apply(DT_lcpm[,-(1:2)], 1, var))
+
 #2. Selecting the 500 genes with the highest inter-sample variance 
 gene_variance_top500 <- gene_variance[order(-variance)][1:500]
+
 #3. Calculating principal components for the genes with highest variance (top 500) from DT_lcpm
 setkey(DT_lcpm, ENSEMBL_ID)
 DT_principal_comp_raw <- prcomp(t(DT_lcpm[ENSEMBL_ID %in% gene_variance_top500[,ENSEMBL_ID],-(1:2)]))
 DT_principal_comp_summary <- data.table(sd=summary(DT_principal_comp_raw)$sdev)
+
 #4. Subsetting data from raw PC-object for plotting
 DT_principal_comp <- data.table(ID=factor(rownames(DT_principal_comp_raw$x)), DT_principal_comp_raw$x)
+
 #5. Merging with meta data
 DT_principal_comp <- merge(DT_principal_comp, DT_meta_data[,.(ID, group)], by="ID")
+
 #6. Calculating proportion of explained variance for each component
 DT_principal_comp_summary <- DT_principal_comp_summary[,var:=sd**2][,var.prop:=var/sum(var)][,var.prop.cumsum:=cumsum(var.prop)]
 
@@ -321,11 +339,14 @@ PCA_plot_prop.var_function <- function(dataset, yvariable, color){
 
 #8. Selecting the 500 genes with highest variance from the log-CPM matrix
 DT_pca_sim <- DT_lcpm[ENSEMBL_ID %in% gene_variance_top500[,ENSEMBL_ID],-(1:2)]
-#9. Boostrapping proportion of variance for each principal component   
+
+#9. Bootsrapping proportion of variance for each principal component   
 DT_pca_boot_conf <- boot(DT_pca_sim, function(dataset, b){summary(prcomp(t(dataset[b])))$importance[2,]}, 1000)
+
 #10. Extracting 95 % confidence intervals from bootstrapped data
 DT_pca_boot_conf_summary <- suppressWarnings(data.table(do.call(rbind, lapply(1:10, function(column){boot.ci(DT_pca_boot_conf, type="bca", index=column)$bca[(4:5)]}))))
 names(DT_pca_boot_conf_summary) <- c("CI.Lower", "CI.Upper")
+
 #11. Converting bootstrapped data into plotable data 
 DT_pca_boot_conf_plotdata <- data.table(DT_pca_boot_conf$t)[, 1:10]
 names(DT_pca_boot_conf_plotdata) <- names(DT_pca_boot_conf$t0)[1:10]
@@ -354,9 +375,11 @@ tSNE_plot_data <- data.table(DT_tSNE$Y, group=DT_meta_data[, group], ID=DT_meta_
 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=6, fig.width=10}
 #1. Creating group name variable
-group_names <- c("invitro", "Naive&NPC[2w]", "Naive&NPC[3w]", "SCI&NPC[2w]", "SCI&NPC[3w]")
+group_names <- c("Invitro", "Naive&NPC[2w]", "Naive&NPC[3w]", "SCI&NPC[2w]", "SCI&NPC[3w]")
+
 #2. Creating color palette for usage in plots downstream
 color_palette <- brewer.pal(11, "RdBu")[c(1,2,4,10,11)]
+
 #3. Creating ellipse data
 #[PCA]
 ellipse_data_PCA <- suppressWarnings(do.call(rbind,lapply(split(DT_principal_comp, DT_principal_comp[,group]), function(group.object){data.table(group=group.object[,group], with(group.object, ellipse::ellipse(cor(PC1,PC2), scale = c(sd(PC1), sd(PC2)), centre=c(mean(PC1), mean(PC2)), t=1.5)))})))
@@ -381,14 +404,13 @@ PCA_plot <- ggplot(DT_principal_comp, aes(PC1, PC2))+
   
   theme(legend.title = element_blank(), legend.position = "none", legend.text=element_text(size=20), legend.justification="center", axis.title=element_text(size=22, face="bold"), axis.line=element_blank(), axis.ticks=element_blank())+
   
-  annotate("text", x=DT_principal_comp[group=="SCI:2W", mean(PC1)]+20, y=DT_principal_comp[group=="SCI:2W", mean(PC2)], label="SCI&NPC[2w]", size=4, fontface=2)+
+  annotate("text", x=DT_principal_comp[group=="SCI:2W", mean(PC1)]+25, y=DT_principal_comp[group=="SCI:2W", mean(PC2)], label="SCI&NPC[2w]", size=4, fontface=2)+
   annotate("text", x=DT_principal_comp[group=="Naive:2W", mean(PC1)], y=DT_principal_comp[group=="Naive:2W", mean(PC2)]-15, label ="Naive&NPC[2w]", size=4, fontface=2)+
   annotate("text", x=DT_principal_comp[group=="SCI:3W", mean(PC1)], y=DT_principal_comp[group=="SCI:3W", mean(PC2)]-12, label="SCI&NPC[3w]", size=4, fontface=2)+
   annotate("text", x=DT_principal_comp[group=="Naive:3W", mean(PC1)], y=DT_principal_comp[group=="Naive:3W", mean(PC2)]+15, label="Naive&NPC[3w]", size=4, fontface=2)+
   annotate("text", x=DT_principal_comp[group=="invitro", mean(PC1)], y=DT_principal_comp[group=="invitro", mean(PC2)]+10, label="In vitro", size=4, fontface=2)+
   
   annotate(geom="text", x=0, y=0, label="PCA", size=10, fontface=2, alpha=0.7)
-
 
 #5. 2D plot [tSNE]
 tSNE_plot <- function(legend_status){
@@ -416,22 +438,22 @@ tSNE_plot <- function(legend_status){
 
 ```
 
-**Fig 5. Dimensionality reduction using PCA and t-SNE of the 500 genes with highest variance**
+**Fig 4. Dimensionality reduction using PCA and t-SNE of the 500 genes with highest variance**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=6, fig.width=12}
-#Plotting 2D dimension reduction graphs (PCA, tSNE)
+#1. Plotting 2D dimension reduction graphs (PCA, tSNE)
 PCA_tSNE_legend <- get_legend(tSNE_plot("bottom"))
-grid.arrange(arrangeGrob(arrangeGrob(PCA_plot, tSNE_plot("none"), ncol=2), PCA_tSNE_legend, nrow=2, heights=c(6,1)))
 
+grid.arrange(arrangeGrob(arrangeGrob(arrangeGrob(PCA_plot, left=textGrob("A", vjust=-13, hjust=2, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(tSNE_plot("none"), left=textGrob("B", vjust=-13, hjust=2, gp=gpar(fontface=2, fontsize=20))), ncol=2), PCA_tSNE_legend, nrow=2, heights=c(6,1)))
 ```
 
-**Fig 5.** _Figure reports the samples in low dimensional space following dimensionality reduction with PCA and t-SNE for the 500 genes with the highest variance. Ellipses are added to the samples for easier recognition of the study groups._
+**Fig 4.** _Figure reports the samples in low dimensional space following dimensionality reduction with PCA and t-SNE for the 500 genes with the highest variance. Ellipses are added to the samples for easier recognition of the study groups._
 
 ***
 
 #Clustering Algorithms
 
-**Fig 9. Hierarchical clustering of samples using 500 most variable genes**
+**Fig 5. Hierarchical clustering of samples using 500 most variable genes**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=6, fig.width=14}
 train <- sample(1:nrow(DT_principal_comp), round(0.5*nrow(DT_principal_comp)))
@@ -477,23 +499,28 @@ PCA_cluster_data <- merge(PCA_cluster_data, AP_PCA[, .(ID, AP)], by="ID")
 tSNE_cluster_data <- cbind(tSNE_plot_data, KM=k_means_tSNE, KNN=KNN_tSNE, SVM=SVM_tSNE)
 tSNE_cluster_data <- merge(tSNE_cluster_data, AP_PCA[, .(ID, AP)], by="ID")
 
-#5. Hierarchical clustering: 500 genes with highest variance
+#8A. Hierarchical clustering: 500 genes with highest variance
 
 #1. Selecting the 1000 most variable genes (500 to low to separate the remaining two in-vitro samples)
 gene_variance_top1000 <- gene_variance[order(-variance)][1:1000]
-#1. Creating a dissimilarity structure for the 500 genes with highest variance
+
+#2. Creating a dissimilarity structure for the 500 genes with highest variance
 setkey(DT_lcpm, ENSEMBL_ID)
 DT_dist <- dist(t(DT_lcpm[ENSEMBL_ID %in% gene_variance_top1000[,ENSEMBL_ID],-(1:2)]))
-#2. Hierarchical clustering on the dissimilarity structure
+
+#3. Hierarchical clustering on the dissimilarity structure
 DT_hclust <- hclust(DT_dist)
 
 #8B. Circular packing representation
+
 #1. Creating a phylo-object from a hclust-object
 DT_hclust_phylo <- as.phylo(DT_hclust)
 DT_hclust_edges <- DT_hclust_phylo$edge
+
 #2. Creating data frame and graph data from the data frame
 DT_hclust_circularpacking <- data.frame(from=DT_hclust_edges[,1], to=DT_hclust_edges[,2])
 DT_hclust_circularpacking <- graph_from_data_frame(DT_hclust_circularpacking)
+
 #3. Create and arrange for addition of group and ID to the data frame
 circular_packing_data_adjust  <- function(data_set, n_samples, left_to_right_ID){
   leaf_labels <- data.table(ID=c(rep(NA, length(V(data_set)$name)-n_samples), left_to_right_ID))
@@ -533,12 +560,12 @@ arrangeGrob(hierarchical_clustering_circular_1000, left=textGrob("B", vjust=-9, 
 
 ```
 
-**Fig 9.** _Figure reports hierarchical clustering based on the 500 most variable genes. Fig 9A reports the clustering using a dendrogram while Fig 9B reports the same clustering using a circular packing plot._
+**Fig 5.** _Figure reports hierarchical clustering based on the 500 most variable genes. Fig 9A reports the clustering using a dendrogram while Fig 9B reports the same clustering using a circular packing plot._
 
-**Fig 10. Clustering of samples using common methods following dimensionality reduction with PCA and t-SNE**
+**Fig 6. Clustering of samples using common methods following dimensionality reduction with PCA and t-SNE**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=12, fig.height=6}
-#Aligning column names
+#1. Aligning column names
 setnames(PCA_cluster_data, c("PC1", "PC2", "PC3"), c("V1", "V2", "V3"))
 
 #2. Function which plots data following dimensionality reduction
@@ -568,18 +595,18 @@ dimension_plot_function <- function(data_set, dim_reduction_type, legend.positio
   return(dim_plot)
 }
 
-cluster_legend <- get_legend(dimension_plot_function(PCA_cluster_data, "", cluster_type = "KNN", legend.position = "bottom"))
+cluster_legend <- get_legend(dimension_plot_function(PCA_cluster_data, "", cluster_type = "KM", legend.position = "bottom"))
 
 #K-Means Clustering
-grid.arrange(arrangeGrob(arrangeGrob(dimension_plot_function(PCA_cluster_data, "K-Means Clustering (3Cs)\n[PCA]", cluster_type = "KM"), left=textGrob("E", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(dimension_plot_function(tSNE_cluster_data, "K-Means Clustering (3Cs)\n[tSNE]", cluster_type = "KM"), left=textGrob("F", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), ncol=2), cluster_legend, nrow=2, heights=c(5,1))
+grid.arrange(arrangeGrob(arrangeGrob(dimension_plot_function(PCA_cluster_data, "K-Means Clustering (3Cs)\n[PCA]", cluster_type = "KM"), left=textGrob("A", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(dimension_plot_function(tSNE_cluster_data, "K-Means Clustering (3Cs)\n[tSNE]", cluster_type = "KM"), left=textGrob("B", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), ncol=2), cluster_legend, nrow=2, heights=c(5,1))
 #Affinity Propagation
-grid.arrange(arrangeGrob(arrangeGrob(dimension_plot_function(PCA_cluster_data, "Affinity Propagation\n[PCA]", cluster_type = "AP"), left=textGrob("K", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(dimension_plot_function(tSNE_cluster_data, "Affinity Propagation\n[tSNE]", cluster_type = "AP"), left=textGrob("L", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), ncol=2), cluster_legend, nrow=2, heights=c(5,1))
+grid.arrange(arrangeGrob(arrangeGrob(dimension_plot_function(PCA_cluster_data, "Affinity Propagation\n[PCA]", cluster_type = "AP"), left=textGrob("C", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(dimension_plot_function(tSNE_cluster_data, "Affinity Propagation\n[tSNE]", cluster_type = "AP"), left=textGrob("D", vjust=-9, hjust=-3, gp=gpar(fontface=2, fontsize=20))), ncol=2), cluster_legend, nrow=2, heights=c(5,1))
 
 ```
 
-**Fig 10.** _Figure reports result of common clustering algorithms implemented on samples following dimensionality reduction using PCA and t-SNE. In the case train-test split was required a 60:40 ratio (13:9 samples) was used instead of a traditional 80:20 ratio due to low number of samples in the test set._
+**Fig 6.** _Figure reports result of K-means clsutering and affinity propagation algorithms implemented on samples following dimensionality reduction using PCA and t-SNE. In the case train-test split was required a 50:50 ratio (9:9 samples) was used instead of a traditional 80:20 ratio due to low number of samples in the test set._
 
-**Fig 12. Top ten loadings (absolute value) for the first two principal components**
+**Fig 7. Top ten loadings for the first two principal components**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=6, fig.width=14}
 #1. Selecting PC1 and PC2 and adding gene names 
@@ -591,12 +618,13 @@ DT_loadings_sub_function <- function(data.load, pc.type, n){
   load_out[,"V2"] <- round(load_out[, V2],3)
   load_out <- load_out[ ,PC.type:=pc.type]
   names(load_out) <- c("Gene", "PC.value", "PC.type")
-  return(load_out)  
-}
+  return(load_out)}
 
-DT_loadings_plotdata <- rbind(DT_loadings_sub_function(DT_loadings[!is.na(SYMBOL)],"PC1", 10), DT_loadings_sub_function(DT_loadings[!is.na(SYMBOL)],"PC2", 10))
+DT_loadings_plotdata <- rbind(DT_loadings_sub_function(DT_loadings[!is.na(SYMBOL)], "PC1", 10), DT_loadings_sub_function(DT_loadings[!is.na(SYMBOL)], "PC2", 10))
+
 #3. Adding a type variable for plotting purposes
 DT_loadings_plotdata <- DT_loadings_plotdata[,sign.type:=factor(ifelse(PC.value>0,"pos","neg"))]
+
 #4. Plotting function [traditional barplot]
 DT_loadings_plot_function <- function(data.set.loading, pc.type){
   data.set.loading <- data.set.loading[PC.type==pc.type]
@@ -609,7 +637,7 @@ DT_loadings_plot_function <- function(data.set.loading, pc.type){
   geom_segment(aes(x=0, xend=20, y=0, yend=0), size=2, linetype=2)+
   coord_flip()+
   
-  scale_y_continuous(breaks=seq(-0.25, 0.25, 0.05), limits=c(-0.3, 0.3))+
+  scale_y_continuous(breaks=seq(-0.2, 0.2, 0.05), limits=c(-0.2, 0.2))+
   scale_alpha_manual(values=c(0.7,0.9))+
   
   theme(axis.text.x = element_text(size=12), axis.title.x = element_text(face="bold", size=22), axis.title.y = element_blank(), axis.text.y = element_text(size=15))
@@ -628,13 +656,13 @@ grid.arrange(arrangeGrob(DT_loadings_plot_function(DT_loadings_plotdata, "PC1"),
 
 ```
 
-**Fig 12.** _Figure reports the top 10 positive and negative loadings for the first -and second principal component._
+**Fig 7.** _Figure reports the top 10 positive and negative loadings for the first -and second principal component._
 
 ***
 
 # Linear Modelling and Empirical Bayes Moderation Using Precision Weights 
 
-**Fig 15. Mean-variance relationship pre -and post voom transformation**
+**Fig 8. Mean-variance relationship pre -and post voom transformation**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.height=4, fig.width=12}
 #1. Setting up a design matrix (a dummy matrix indicating which group each sample belongs to)
@@ -701,16 +729,16 @@ grid.arrange(arrangeGrob(arrangeGrob(voom_plot, left=textGrob("A", vjust=-10, hj
 
 ```
 
-**Fig 15.** _Figure reports the mean-variance relationship pre -and post application of the voom function. Fig 15A reports the average log-CPM against the quarter root of the variance. Fig 15B reports average log-CPM against the $log_2(st.dev)$. Blue line reports the average $log_2(st.dev)$. The red line is a linear trend fitted to the black dots. Each black dot represents a gene. Fig 15A illustrates that the variance is decresing when the average expression is increasing. In Fig 15B the dependency is removed and the mean variance is unchanged when the average expression increases._      
+**Fig 8.** _Figure reports the mean-variance relationship pre -and post application of the voom function. Fig 8A reports the average log-CPM against the quarter root of the variance. Fig 8B reports average log-CPM against the $log_2(st.dev)$. Blue line reports the average $log_2(st.dev)$. The red line is a linear trend fitted to the black dots. Each black dot represents a gene. Fig 8A illustrates that the variance is decreasing when the average expression is increasing. In Fig 8B the dependency is removed and the mean variance is unchanged when the average expression increases._      
 
-**Fig 16. Hierarchical clustering and circular packing plot of 1000 genes with highest F-value**
+**Fig 9. Hierarchical clustering and circular packing plot of 1000 genes with highest F-value**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=14, fig.height=6}
 #Hierarchical clustering of the 1000 genes with highest F-value
 #1. Calculating F-statistica
 DT_toptableF <- data.table(topTableF(DT_efit, number=Inf, genelist = DT_read_count_filtered[,SYMBOL]))
 #2. Subsetting the 500 genes with the highest F-statistica
-DT_toptableF <- DT_toptableF[!is.na(ProbeID)][1:1500, ProbeID]
+DT_toptableF <- DT_toptableF[!is.na(ProbeID)][1:1000, ProbeID]
 #3. Retrieving log-CPM values for the genes
 DT_toptableF <- DT_lcpm[DT_lcpm[,SYMBOL] %in% DT_toptableF]
 #4. Creating a dissimilarity matrix
@@ -729,7 +757,7 @@ DT_toptableF_circularpacking <- circular_packing_data_adjust(DT_toptableF_circul
 hierarchical_clustering_circular_Fstatistica <- ggraph(DT_toptableF_circularpacking, layout='circlepack')+
   geom_node_circle(aes(fill = as.factor(depth), color = as.factor(depth)), alpha=0.6)+
   scale_fill_manual(values=c("0"="white", "1"="white", "2"=color_palette_RdBu[2], "3"=color_palette_RdBu[3], "4"=color_palette_RdBu[4], "5"=color_palette_RdBu[5], "6"=color_palette_RdBu[6], "7"=color_palette_RdBu[7], "8"=color_palette_RdBu[8]))+
-  scale_color_manual(values=c("0" = "white", "1" = "white", "2" = color_palette_RdBu[2], "3" = color_palette_RdBu[3], "4"=color_palette_RdBu[4], "5"=color_palette_RdBu[5], "6"=color_palette_RdBu[6], "7"=color_palette_RdBu[7], "8"=color_palette_RdBu[8]))+
+  scale_color_manual(values=c("0"="white", "1"="white", "2"=color_palette_RdBu[2], "3"=color_palette_RdBu[3], "4"=color_palette_RdBu[4], "5"=color_palette_RdBu[5], "6"=color_palette_RdBu[6], "7"=color_palette_RdBu[7], "8"=color_palette_RdBu[8]))+
   
   theme_void()+
   theme(legend.position="FALSE")+
@@ -746,7 +774,7 @@ arrangeGrob(left=textGrob("B", vjust=-10, hjust=0, gp=gpar(fontface=2, fontsize=
 
 ```
 
-**Fig 16.** _Figure reports hierarchical clustering of samples based on the 1000 genes with highest F-values. Fig 16A reports a dendrogram while Fig 16B reports a circular packing plot._ 
+**Fig 9.** _Figure reports hierarchical clustering of samples based on the 1000 genes with highest F-values. Fig 9A reports a dendrogram while Fig 9B reports a circular packing plot._ 
 
 ***
 
@@ -766,10 +794,10 @@ venn_data_function <- function(data.set, c1=NULL, c2=NULL, c3=NULL){
 venn_plot_2w <- invisible(draw.triple.venn(sum(venn_data_logical[,1]), 
                sum(venn_data_logical[,3]), 
                sum(venn_data_logical[,6]), 
-               venn_data_function(venn_data_logical,1,3),
-               venn_data_function(venn_data_logical,3,6),
-               venn_data_function(venn_data_logical,1,6),
-               venn_data_function(venn_data_logical,1,3,6),
+               venn_data_function(venn_data_logical, 1, 3),
+               venn_data_function(venn_data_logical, 3, 6),
+               venn_data_function(venn_data_logical, 1, 6),
+               venn_data_function(venn_data_logical, 1, 3, 6),
                category=c("Invitro - Naive&NPC[2w]", "Invitro - SCI&NPC[2w]", "Naive&NPC[2w] - SCI&NPC[2w]"),
                lwd=c(2,2,2),
                fill=brewer.pal(11,"RdBu")[c(2,4,9)],
@@ -786,10 +814,10 @@ venn_plot_2w <- invisible(draw.triple.venn(sum(venn_data_logical[,1]),
 venn_plot_3w <- invisible(draw.triple.venn(sum(venn_data_logical[,2]), 
                sum(venn_data_logical[,4]), 
                sum(venn_data_logical[,9]), 
-               venn_data_function(venn_data_logical,2,4),
-               venn_data_function(venn_data_logical,4,9),
-               venn_data_function(venn_data_logical,2,9),
-               venn_data_function(venn_data_logical,2,4,9),
+               venn_data_function(venn_data_logical, 2, 4),
+               venn_data_function(venn_data_logical, 4, 9),
+               venn_data_function(venn_data_logical, 2, 9),
+               venn_data_function(venn_data_logical, 2, 4, 9),
                category=c("Invitro - Naive&NPC[3w]", "Invitro - SCI&NPC[3w]", "Naive&NPC[3w] - SCI&NPC[3w]"),
                lwd=c(2,2,2),
                fill=brewer.pal(11,"RdBu")[c(2,4,9)],
@@ -803,41 +831,42 @@ venn_plot_3w <- invisible(draw.triple.venn(sum(venn_data_logical[,2]),
                margin=c(0.2)))
 
 #Between timepoints (2->3w) for Naive vs SCI contrast
+dev.off()
 venn_plot_2w_3w <- invisible(draw.pairwise.venn(sum(venn_data_logical[,6]), 
                sum(venn_data_logical[,9]), 
-               venn_data_function(venn_data_logical,6,9),
+               venn_data_function(venn_data_logical, 6, 9),
                category=c("Naive&NPC[2w] - SCI&NPC[2w]", "Naive&NPC[3w] - SCI&NPC[3w]"),
                lwd=c(2,2),
                fill=brewer.pal(11,"RdBu")[c(2,9)],
                scaled=F,
                alpha=0.7,
                cex=1.5,
-               cat.cex=2,
+               cat.cex=1,
                cat.col= brewer.pal(11,"RdBu")[c(2,9)],
                cat.fontface=2,
-               cat.just=list(c(0.8, -6), c(0.3, -6)),
-               cat.default.pos = "text"))
-               #margin=c(0.3)
-
+               cat.just=list(c(0.5, -10), c(0.5, -10)),
+               cat.default.pos = "text", 
+               margin=c(0.3)))
+               
 ```
 
-**Fig 17. Number of differentially expressed genes for each contrast (FDR<0.05)**
+**Fig 10. Number of differentially expressed genes for each contrast (FDR<0.05)**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=12, fig.height=6, fig.align='center'}
 ###SECTION OUTPUT
-grid.arrange(arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("A", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("B", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), ncol=2)
+grid.arrange(arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("A", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), arrangeGrob(gTree(children=venn_plot_3w), left=textGrob("B", gp=gpar(fontface="bold", fontsize=20), vjust=-13)), ncol=2)
 ```
 
-**Fig 17.** _Figure A reports the number of DGE genes between contrasts Naive[2w] vs invitro, SCI[2w] vs invitro, Naive[2w] vs SCI[2w]. Figure B reports the number of DGE genes between contrasts Naive[2w] vs invitro, SCI[2w] vs invitro and Naive[2w] vs SCI[2w]._
+**Fig 10.** _Figure 10A reports the number of DE genes between contrasts Naive[2w] vs invitro, SCI[2w] vs invitro, Naive[2w] vs SCI[2w]. Figure 10B reports the number of DE genes between contrasts Naive[3w] vs invitro, SCI[3w] vs invitro and Naive[3w] vs SCI[3w]._
 
-**Fig 18. Number of differentially expressed genes for each contrast (FDR<0.05)**
+**Fig 11. Number of differentially expressed genes for each contrast (FDR<0.05)**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=5, fig.height=4, fig.align='center'}
 ###SECTION OUTPUT
 grid.arrange(arrangeGrob(gTree(children=venn_plot_2w_3w)))
 ```
 
-**Fig 18.** _Figure reports the number of DGE genes within and between contrasts Naive[2w]vsSCI[2w] and Naive[3w]vsSCI[3w]._
+**Fig 11.** _Figure reports the number of DE genes within and between contrasts Naive[2w]vsSCI[2w] and Naive[3w]vsSCI[3w]._
 
 **Table 3. Number of differentially over -and under-expressed genes for each contrast (FDR<0.05)**
 
@@ -847,20 +876,10 @@ DT_dge_summary <- as.data.frame.matrix(summary(DT_dge))
 DT_dge_summary <- rbind(DT_dge_summary, colSums(DT_dge_summary))
 rownames(DT_dge_summary) <- c("Downregulated:", "No change", "Upregulated:", "Sum:")
 
+### SECTION OUTPUT
 kable(DT_dge_summary[,1:4], align="c", col.names = c("Invitro vs Naive[2w]", "Invitro vs Naive[3w]", "Invitro vs SCI[2w]", "Invitro vs SCI[3w]"))
 
 kable(DT_dge_summary[, 5:10], align="c", col.names = c("Naive[2w] vs Naive[3w]", "Naive[2w] vs SCI[2w]", "Naive[2w] vs SCI[3w]", "Naive[3w] vs SCI[2w]", "Naive[3w] vs SCI[3w]", "SCI[2w] vs SCI[3w]"))
-
-```
-
-```{r echo=F, warning=F, message=F, error=F}
-# #Within timpepoint
-# Naive_2w_SCI_2w #contrast 6
-# Naive_3w_SCI_3w #contrast 9
-# 
-# #Between timepoints
-# Naive_2w_Naive_3w #contrast 5
-# SCI_2w_SCI_3w #contrast 10
 
 ```
 
@@ -893,7 +912,7 @@ DT_volcano_SCI <- volcano_data_function(DT_mean_difference_SCI, 10)
 ```
 
 ```{r echo=F, warning=F, message=F, error=F}
-#Mean-difference plot function
+#1. Mean-difference plot function
 mean_difference_plot_function <- function(data_set){
   plot_out <- ggplot(data_set, aes(AveExpr,logFC))+
   geom_jitter(data_set[(logFC>(-1) & logFC<1)], mapping=aes(AveExpr, logFC), alpha=0.7, size=3)+
@@ -925,7 +944,7 @@ mean_difference_plot_function <- function(data_set){
   return(plot_out)
 }
 
-#Volcano plot function
+#2. Volcano plot function
 volcano_plot_function <- function(data_set){
   plot_out <- ggplot(data_set, aes(logFC, log.odds))+
   geom_jitter(data_set[log.odds<1 & (logFC>=1 | logFC<=(-1))], mapping=aes(logFC, log.odds), alpha=0.7, size=3, color="dodgerblue4")+
@@ -942,8 +961,8 @@ volcano_plot_function <- function(data_set){
   ylab("-log10(p.value)")+
   xlab("Log2(fold change)")+
   
-  annotate("text", x=4, y=50, label="UP-REGULATION", fontface=2, alpha=0.6, size=5)+
-  annotate("text", x=-4, y=50, label="DOWN-REGULATION", fontface=2, alpha=0.6, size=5)+
+  annotate("text", x=4, y=50, label="UP-REGULATED", fontface=2, alpha=0.6, size=5)+
+  annotate("text", x=-4, y=50, label="DOWN-REGULATED", fontface=2, alpha=0.6, size=5)+
 
   theme(axis.title = element_text(face="bold", size=22))
   
@@ -952,19 +971,19 @@ volcano_plot_function <- function(data_set){
 
 ```
 
-**Fig 18. Mean difference -and volcano plot (FDR<0.05)**
+**Fig 12. Mean difference -and volcano plot (FDR<0.05)**
 
 ```{r echo=F, warning=F, message=F, error=F, fig.width=14, fig.height=5}
 plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_2w), left=textGrob("A", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_2w), left=textGrob("B", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 
 plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_3w), left=textGrob("C", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_3w), left=textGrob("D", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 
-plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_Naive), left=textGrob("E", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_Naive), left=textGrob("E", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
+plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_Naive), left=textGrob("E", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_Naive), left=textGrob("F", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 
 plot_grid(arrangeGrob(mean_difference_plot_function(DT_mean_difference_SCI), left=textGrob("G", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))), arrangeGrob(volcano_plot_function(DT_volcano_SCI), left=textGrob("H", vjust=-11, hjust=-2, gp=gpar(fontsize=20, fontface=2))))
 ```
 
-**Fig 18.** _Right figure reports a mean-difference plot which illustrates the number of over -and under expressed genes. Threshold is set at $log_2(fold change)$ +/-1 (blue lines). Blue dots represents genes above or below the log-fold change thresholds while red dots represent those genes which are above/below the thresholds and are significantly (p<1e-6) differentially expressed. Left figure is a volcano plot which reports the number of significantly (p<1e-6) over -and underexpressed genes (marked with red). Blue dots represent genes which have logFC <-1 or >1 but are not significantly expressed. Figure A&B are for contrast Naive[2w]vsSCI[2w], Figure C&D are for contrast Naive[3w]vsSCI[3w], figure E&F are for contrast Naive[2w]vsNaive[3w] and figure G&H for contrast SCI[2w]vsSCI[3w]._
+**Fig 12.** _Left figure reports a mean-difference plot which illustrates the number of over -and under expressed genes. Threshold is set at $log_2(fold change)$ +/-1 (blue lines). Blue dots represents genes above or below the log-fold change thresholds while red dots represent those genes which are above/below the thresholds and are significantly (p<0.05) differentially expressed. Right figure is a volcano plot which reports the number of significantly (p<0.05) over -and underexpressed genes (marked with red). Blue dots represent genes which have logFC <-1 or >1 but are not significantly expressed. Figure A&B are for contrast Naive[2w] vs SCI[2w], Figure C&D are for contrast Naive[3w] vs SCI[3w], figure E&F are for contrast Naive[2w] vs Naive[3w] and figure G&H for contrast SCI[2w] vs SCI[3w]._
 
 ```{r echo=F, warning=F, message=F, error=F}
 #1. Function for retrieving logFC and associated p-values for most over -and underexpressed genes 
@@ -989,25 +1008,25 @@ top_20_dge_SCI <- top_20_dge_retreiver(DT_efit, 10, 0.05, 10)
 
 **Table 4. 10 most significantly up -and downregulated differentially expressed genes (FDR<0.05)**  
 
-**Contrast: Naive[2w] vs SCI[2w]**
+**4A. Contrast: Naive[2w] vs SCI[2w]**
 
 ```{r echo=F, warning=F, message=F, error=F}
-kable(top_20_dge_2w, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+kable(top_20_dge_2w, align=rep(c("l", "c", "c"), 2), col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
 ```
 
-**Contrast: Naive[3w] vs SCI[3w]**  
+**4B. Contrast: Naive[3w] vs SCI[3w]**  
 ```{r echo=F, warning=F, message=F, error=F}
-kable(top_20_dge_3w, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+kable(top_20_dge_3w, align=rep(c("l", "c", "c"), 2), col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
 ```
 
-**Contrast: Naive[2w] vs Naive[3w]**  
+**4C. Contrast: Naive[2w] vs Naive[3w]**  
 ```{r echo=F, warning=F, message=F, error=F}
-kable(top_20_dge_Naive, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+kable(top_20_dge_Naive, align=rep(c("l", "c", "c"), 2), col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
 ```
 
-**Contrast: SCI[2w] vs SCI[3w]**  
+**4D. Contrast: SCI[2w] vs SCI[3w]**  
 ```{r echo=F, warning=F, message=F, error=F}
-kable(top_20_dge_SCI, align="c", col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
+kable(top_20_dge_SCI, align=rep(c("l", "c", "c"), 2), col.names = rep(c("Gene", "log2(fold change)", "P-value (adjusted)"), 2))
 ```
 
 ***
@@ -1017,9 +1036,11 @@ kable(top_20_dge_SCI, align="c", col.names = rep(c("Gene", "log2(fold change)", 
 ```{r echo=F, warning=F, message=F, error=F}
 #1. Getting ENTREZ IDs for all genes in the filtered read count matrix 
 entrez_ID <- suppressMessages(data.table(OrganismDbi::select(Rattus.norvegicus, keys=DT_read_count_filtered[,as.character(ENSEMBL_ID)], columns="ENTREZID", keytype="ENSEMBL")))
+
 #2. Removing duplicates
 entrez_ID <- entrez_ID[!duplicated(ENSEMBL)]
-#3. Gene ontology enrichment analysis function
+
+#3. GO enrichment analysis function
 GO_retreiver <- function(contrast){
   GO_out <- goana(DT_efit, coef=contrast, geneid = entrez_ID[,as.character(ENTREZID)], FDR=0.05, species="Rn") 
   GO_out <- data.table(topGO(GO_out, sort="down", n=10)) 
@@ -1034,28 +1055,28 @@ KEGG_retriever <- function(contrast){
 
 **Table 5. GO terms and KEGG pathways (FDR<0.05)**
 
-**Contrast: Naive[2w] vs SCI[2w]**
+**5A. Contrast: Naive[2w] vs SCI[2w]**
 
 ```{r echo=F, warning=F, message=F, error=F}
 kable(GO_retreiver(6), align=c("l", rep("c", 6)))
 kable(KEGG_retriever(6), align=c("l", rep("c", 5)))
 ```
 
-**Contrast: Naive[3w] vs SCI[3w]**  
+**5B. Contrast: Naive[3w] vs SCI[3w]**  
 
 ```{r echo=F, warning=F, message=F, error=F}
 kable(GO_retreiver(9), align=c("l", rep("c", 6)))
 kable(KEGG_retriever(9), align=c("l", rep("c", 5)))
 ```
 
-**Contrast: Naive[2w] vs Naive[3w]**  
+**5C. Contrast: Naive[2w] vs Naive[3w]**  
 
 ```{r echo=F, warning=F, message=F, error=F}
 kable(GO_retreiver(5), align=c("l", rep("c", 6)))
 kable(KEGG_retriever(5), align=c("l", rep("c", 5)))
 ```
 
-**Contrast: SCI[2w] vs SCI[3w]**  
+**5D. Contrast: SCI[2w] vs SCI[3w]**  
 
 ```{r echo=F, warning=F, message=F, error=F}
 kable(GO_retreiver(10), align=c("l", rep("c", 6)))
@@ -1080,6 +1101,7 @@ heatmap_data_function <- function(contrast, p_value_cutoff){
   return(data_out)}
 
 #2. Heatmap-function
+dev.off()
 heatmap_plot_function <- function(heatmap.data){
     heatmap.data <- data.matrix(heatmap.data[, 3:length(heatmap.data)])
     heatmap_plot_out <- heatmap.2(heatmap.data,
@@ -1092,7 +1114,7 @@ heatmap_plot_function <- function(heatmap.data){
             col=bluered(12),
             labRow = " ",
             labCol= DT_meta_data[, group],
-            cexCol = 3,
+            cexCol = 1,
             cexRow = 0.5,
             offsetRow = 0.1,
             offsetCol = -0.5,
@@ -1105,33 +1127,33 @@ heatmap_plot_function <- function(heatmap.data){
 
 ```
 
-**Fig 19. Hierarchical clustering of samples together with heatmap of significantly differentially expressed genes**
+**Fig 13. Hierarchical clustering of samples together with heatmap of significantly differentially expressed genes**
 
-**Contrast: Naive[2w] vs SCI[2w]**
+**13A. Contrast: Naive[2w] vs SCI[2w] (FDR<1e-6)**
 
-```{r echo=F, warning=F, message=F, error=F, fig.width=7, fig.height=10}
+```{r echo=F, warning=F, message=F, error=F, fig.width=10, fig.height=10}
 heatmap_plot_function(heatmap_data_function(6, 1e-6))
 ```
 
-**Contrast: Naive[3w] vs SCI[3w]**
+**13B. Contrast: Naive[3w] vs SCI[3w] (FDR<1e-6)**
 
-```{r echo=F, warning=F, message=F, error=F, fig.width=7, fig.height=10}
+```{r echo=F, warning=F, message=F, error=F, fig.width=10, fig.height=10}
 heatmap_plot_function(heatmap_data_function(9, 1e-6))
 ```
 
-**Contrast: Naive[2w] vs Naive[3w]**
+**13C. Contrast: Naive[2w] vs Naive[3w] (FDR<0.05)**
 
-```{r echo=F, warning=F, message=F, error=F, fig.width=7, fig.height=10}
+```{r echo=F, warning=F, message=F, error=F, fig.width=10, fig.height=10}
 heatmap_plot_function(heatmap_data_function(5, 0.05))
 ```
 
-**Contrast: SCI[2w] vs SCI[3w]**
+**13D. Contrast: SCI[2w] vs SCI[3w] (FDR<1e-6)**
 
-```{r echo=F, warning=F, message=F, error=F, fig.width=7, fig.height=10}
+```{r echo=F, warning=F, message=F, error=F, fig.width=10, fig.height=10}
 heatmap_plot_function(heatmap_data_function(10, 1e-6))
 ```
 
-**Fig 19.** _Figure reports a heatmap with hierarchical clustering (indicated with dendrograms) using log-CPM values. Only significantly differentially expressed genes are included (and genes with NA symbols were removed)._ 
+**Fig 13.** _Figure reports a heatmap with hierarchical clustering (indicated with dendrograms) using log-CPM values. Only significantly differentially expressed genes are included (genes with NA symbols were removed)._ 
 
 # Gene Set Testing
 
