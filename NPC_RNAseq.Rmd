@@ -26,7 +26,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Project Description
 
-**Hypothesis:**  The transcriptome of subventricular zone derived neural progenitor cells (NPCs) transplanted into a spinal cord injury environment is altered as compared to NPCs transplanted into uninjured spinal cord.
+**Hypothesis:** _The transcriptome of subventricular zone derived neural progenitor cells (NPCs) transplanted into a spinal cord injury environment is altered as compared to NPCs transplanted into uninjured spinal cord._
 
 **Experimental setup & sequencing:** GFP+NPCs were transplanted into injured (250 kdyn contusion injury, 8-10 days post SCI) or uninjured spinal cord using a glas capillary pipette. Lewis female rats were used in all experiments. At 2 & 3 w post transplantation the GFP+NPCs were collected using FACS. FACS of GFP+NPCs from injured spinal cord was performed using injured spinal cord as reference (i.e. negative gate setting). FACS of GFP+NPCs from uninjured spinal cord was performed using uninjured spinal cord as reference. Total RNA, digested of DNase, was isolated and libraries were prepared using SMARTer Stranded Total RNA-Seq Kit - Pico Input Mammalian (Takara). Sequencing was performed 2x125bp in two lane using the HiSeq2500 system and v4 sequencing chemistry (Illumina Inc.) performed by the SNP&SEQ Technology Platform (Stockholm, Sweden).
 
@@ -444,7 +444,8 @@ tSNE_plot <- function(legend_status){
 #1. Plotting 2D dimension reduction graphs (PCA, tSNE)
 PCA_tSNE_legend <- get_legend(tSNE_plot("bottom"))
 
-grid.arrange(arrangeGrob(arrangeGrob(arrangeGrob(PCA_plot, left=textGrob("A", vjust=-13, hjust=2, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(tSNE_plot("none"), left=textGrob("B", vjust=-13, hjust=2, gp=gpar(fontface=2, fontsize=20))), ncol=2), PCA_tSNE_legend, nrow=2, heights=c(6,1)))
+grid.arrange(arrangeGrob(arrangeGrob(arrangeGrob(PCA_plot, left=textGrob("A", vjust=-10, hjust=-1, gp=gpar(fontface=2, fontsize=20))), arrangeGrob(tSNE_plot("none"), left=textGrob("B", vjust=-10, hjust=-1, gp=gpar(fontface=2, fontsize=20))), ncol=2), PCA_tSNE_legend, nrow=2, heights=c(6,1)))
+
 ```
 
 **Fig 4.** _Figure reports the samples in low dimensional space following dimensionality reduction with PCA and t-SNE for the 500 genes with the highest variance. Ellipses are added to the samples for easier recognition of the study groups._
@@ -560,7 +561,7 @@ arrangeGrob(hierarchical_clustering_circular_1000, left=textGrob("B", vjust=-9, 
 
 ```
 
-**Fig 5.** _Figure reports hierarchical clustering based on the 500 most variable genes. Fig 9A reports the clustering using a dendrogram while Fig 9B reports the same clustering using a circular packing plot._
+**Fig 5.** _Figure reports hierarchical clustering based on the 500 most variable genes. Fig 5A reports the clustering using a dendrogram while Fig 5B reports the same clustering using a circular packing plot._
 
 **Fig 6. Clustering of samples using common methods following dimensionality reduction with PCA and t-SNE**
 
@@ -831,7 +832,6 @@ venn_plot_3w <- invisible(draw.triple.venn(sum(venn_data_logical[,2]),
                margin=c(0.2)))
 
 #Between timepoints (2->3w) for Naive vs SCI contrast
-dev.off()
 venn_plot_2w_3w <- invisible(draw.pairwise.venn(sum(venn_data_logical[,6]), 
                sum(venn_data_logical[,9]), 
                venn_data_function(venn_data_logical, 6, 9),
@@ -844,7 +844,7 @@ venn_plot_2w_3w <- invisible(draw.pairwise.venn(sum(venn_data_logical[,6]),
                cat.cex=1,
                cat.col= brewer.pal(11,"RdBu")[c(2,9)],
                cat.fontface=2,
-               cat.just=list(c(0.5, -10), c(0.5, -10)),
+               cat.just=list(c(0.8, -10), c(0.2, -10)),
                cat.default.pos = "text", 
                margin=c(0.3)))
                
@@ -866,7 +866,7 @@ grid.arrange(arrangeGrob(gTree(children=venn_plot_2w), left=textGrob("A", gp=gpa
 grid.arrange(arrangeGrob(gTree(children=venn_plot_2w_3w)))
 ```
 
-**Fig 11.** _Figure reports the number of DE genes within and between contrasts Naive[2w]vsSCI[2w] and Naive[3w]vsSCI[3w]._
+**Fig 11.** _Figure reports the number of DE genes within and between contrasts Naive[2w] vs SCI[2w] and Naive[3w] vs SCI[3w]._
 
 **Table 3. Number of differentially over -and under-expressed genes for each contrast (FDR<0.05)**
 
@@ -1101,7 +1101,6 @@ heatmap_data_function <- function(contrast, p_value_cutoff){
   return(data_out)}
 
 #2. Heatmap-function
-dev.off()
 heatmap_plot_function <- function(heatmap.data){
     heatmap.data <- data.matrix(heatmap.data[, 3:length(heatmap.data)])
     heatmap_plot_out <- heatmap.2(heatmap.data,
